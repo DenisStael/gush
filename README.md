@@ -15,7 +15,7 @@ This README is about the latest `master` code, which might differ from what is r
 ### 1. Add `gush` to Gemfile
 
 ```ruby
-gem 'gush', '~> 2.0'
+gem 'gush', '~> 2.1'
 ```
 
 ### 2. Create `Gushfile`
@@ -74,7 +74,17 @@ end
 
 and this is how the graph will look like:
 
-![SampleWorkflow](https://i.imgur.com/DFh6j51.png)
+```mermaid
+graph TD
+    A{Start} --> B[FetchJob1]
+    A --> C[FetchJob2]
+    B --> D[PersistJob1]
+    C --> E[PersistJob2]
+    D --> F[NormalizeJob]
+    E --> F
+    F --> G[IndexJob]
+    G --> H{Finish}
+```    
 
 
 ## Defining workflows
@@ -211,7 +221,7 @@ For example, in case of Sidekiq this would be:
 bundle exec sidekiq -q gush
 ```
 
-**[Click here to see backends section in official ActiveJob documentation about configuring backends](http://guides.rubyonrails.org/v4.2/active_job_basics.html#backends)**
+**[Click here to see backends section in official ActiveJob documentation about configuring backends](http://guides.rubyonrails.org/active_job_basics.html#backends)**
 
 **Hint**: gush uses `gush` queue name by default. Keep that in mind, because some backends (like Sidekiq) will only run jobs from explicitly stated queues.
 
@@ -319,7 +329,21 @@ flow = NotifyWorkflow.create([54, 21, 24, 154, 65]) # 5 user ids as an argument
 
 it will generate a workflow with 5 `NotificationJob`s and one `AdminNotificationJob` which will depend on all of them:
 
-![DynamicWorkflow](https://i.imgur.com/HOI3fjc.png)
+
+```mermaid
+graph TD
+    A{Start} --> B[NotificationJob]
+    A --> C[NotificationJob]
+    A --> D[NotificationJob]
+    A --> E[NotificationJob]
+    A --> F[NotificationJob]
+    B --> G[AdminNotificationJob]
+    C --> G
+    D --> G
+    E --> G
+    F --> G
+    G --> H{Finish}
+```
 
 ### Dynamic queue for jobs
 
@@ -334,6 +358,23 @@ class NotifyWorkflow < Gush::Workflow
     end
 
     run AdminNotificationJob, after: notification_jobs, queue: 'admin'
+  end
+end
+```
+
+### Dynamic waitable time for jobs
+
+There might be a case you want to configure a job to be executed after a time. Based on above example, we want to configure `AdminNotificationJob` to be executed after 5 seconds.
+
+```ruby
+
+class NotifyWorkflow < Gush::Workflow
+  def configure(user_ids)
+    notification_jobs = user_ids.map do |user_id|
+      run NotificationJob, params: {user_id: user_id}, queue: 'user'
+    end
+
+    run AdminNotificationJob, after: notification_jobs, queue: 'admin', wait: 5.seconds
   end
 end
 ```
